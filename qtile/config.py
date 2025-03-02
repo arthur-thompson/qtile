@@ -24,18 +24,28 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from libqtile import bar, layout, widget, extension
+from libqtile import bar, layout, qtile, widget
 from libqtile.config import Click, Drag, Group, Key, Match, Screen
 from libqtile.lazy import lazy
 from libqtile.utils import guess_terminal
-from libqtile import hook
+
 import os
 import subprocess
+
+from libqtile import hook
+
+@hook.subscribe.startup_once
+def autostart():
+    script = os.path.expanduser("~/.config/qtile/autostart.sh")
+    subprocess.run([script])
 
 mod = "mod4"
 terminal = guess_terminal()
 
 keys = [
+
+    Key([mod], "d", lazy.spawn("rofi -show drun"), desc="rofi"),
+
     # A list of available commands that can be bound to keys can be found
     # at https://docs.qtile.org/en/latest/manual/config/lazy.html
     # Switch between windows
@@ -81,54 +91,67 @@ keys = [
     Key([mod, "control"], "r", lazy.reload_config(), desc="Reload the config"),
     Key([mod, "control"], "q", lazy.shutdown(), desc="Shutdown Qtile"),
     Key([mod], "r", lazy.spawncmd(), desc="Spawn a command using a prompt widget"),
-    
-    Key([mod], "d", lazy.spawn("dmenu_run"), desc="dmenu"),
 ]
+
+# Add key bindings to switch VTs in Wayland.
+# We can't check qtile.core.name in default config as it is loaded before qtile is started
+# We therefore defer the check until the key binding is run by using .when(func=...)
+for vt in range(1, 8):
+    keys.append(
+        Key(
+            ["control", "mod1"],
+            f"f{vt}",
+            lazy.core.change_vt(vt).when(func=lambda: qtile.core.name == "wayland"),
+            desc=f"Switch to VT{vt}",
+        )
+    )
+
 
 groups = [Group(i) for i in "123456789"]
 
 for i in groups:
     keys.extend(
         [
-            # mod1 + letter of group = switch to group
+            # mod + group number = switch to group
             Key(
                 [mod],
                 i.name,
                 lazy.group[i.name].toscreen(),
-                desc="Switch to group {}".format(i.name),
+                desc=f"Switch to group {i.name}",
             ),
-            # mod1 + shift + letter of group = switch to & move focused window to group
+            # mod + shift + group number = switch to & move focused window to group
             Key(
                 [mod, "shift"],
                 i.name,
                 lazy.window.togroup(i.name, switch_group=True),
-                desc="Switch to & move focused window to group {}".format(i.name),
+                desc=f"Switch to & move focused window to group {i.name}",
             ),
             # Or, use below if you prefer not to switch to that group.
-            # # mod1 + shift + letter of group = move focused window to group
+            # # mod + shift + group number = move focused window to group
             # Key([mod, "shift"], i.name, lazy.window.togroup(i.name),
             #     desc="move focused window to group {}".format(i.name)),
         ]
     )
 
 layouts = [
-    layout.Columns(border_focus_stack=["#d75f5f", "#8f3d3d"], border_width=4,margin=14),
-    layout.Max(margin=14),
+    layout.Columns(border_focus_stack=["#d75f5f", "#8f3d3d"], border_width=4, margin=10),
+    layout.Max(),
+    layout.Floating(),
     # Try more layouts by unleashing below layouts.
-     layout.Stack(num_stacks=2,margin=14),
-     layout.Bsp(margin=14),
-     layout.Matrix(margin=14),
-     layout.MonadTall(margin=14),
-     layout.MonadWide(margin=14),
-     layout.RatioTile(margin=14),
-     layout.Tile(margin=14),
-     layout.TreeTab(margin=14),
-     layout.VerticalTile(margin=14),
-     layout.Zoomy(margin=14),
+    # layout.Stack(num_stacks=2),
+    # layout.Bsp(),
+    # layout.Matrix(),
+    # layout.MonadTall(),
+    # layout.MonadWide(),
+     layout.RatioTile(margin=10),
+    # layout.Tile(),
+    # layout.TreeTab(),
+    # layout.VerticalTile(),
+    # layout.Zoomy(),
 ]
 
 widget_defaults = dict(
-    font="sans",
+    font="terminus",
     fontsize=12,
     padding=3,
 )
@@ -148,9 +171,16 @@ screens = [
                     },
                     name_transform=lambda name: name.upper(),
                 ),
-                #widget.TextBox("default config", name="default"),
-                widget.Battery(),
-                widget.TextBox("Press &lt;M-r&gt; to spawn", foreground="#d75f5f"),
+
+		widget.Memory(),
+		widget.Sep(size_percent=50),	
+		widget.ThermalZone(zone='/sys/class/thermal/thermal_zone1/temp'),
+		widget.Sep(size_percent=50),
+		widget.CPU(),
+		widget.Sep(size_percent=50),
+
+               # widget.TextBox("default config", name="default"),
+               # widget.TextBox("Press &lt;M-r&gt; to spawn", foreground="#d75f5f"),
                 # NB Systray is incompatible with Wayland, consider using StatusNotifier instead
                 # widget.StatusNotifier(),
                 widget.Systray(),
@@ -204,6 +234,10 @@ auto_minimize = True
 # When using the Wayland backend, this can be used to configure input devices.
 wl_input_rules = None
 
+# xcursor theme (string or None) and size (integer) for Wayland backend
+wl_xcursor_theme = None
+wl_xcursor_size = 24
+
 # XXX: Gasp! We're lying here. In fact, nobody really uses or cares about this
 # string besides java UI toolkits; you can see several discussions on the
 # mailing lists, GitHub issues, and other WM documentation that suggest setting
@@ -214,7 +248,4 @@ wl_input_rules = None
 # java that happens to be on java's whitelist.
 wmname = "LG3D"
 
-@hook.subscribe.startup
-def autostart():
-    home = os.path.expanduser('~')
-    subprocess.call([home + '/.config/qtile/autostart.sh'])
+
